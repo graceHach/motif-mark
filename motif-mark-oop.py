@@ -174,7 +174,7 @@ class Sequence():
                 # then increment the number of overlaps both have
                 sorted_list_of_lists[end_index][3] += 1
                 sorted_list_of_lists[start_index][3] += 1
-                # move onto the next motif, continue incrementing this variable util the overlap
+                # move onto the next motif i+1, continue incrementing this variable util the overlap
                 # with motif i is cleared
                 start_index += 1
             else:
@@ -188,7 +188,7 @@ class Sequence():
 # Create object for the whole drawing, pass in all Input Sequences, figure name
 class Drawing():
 
-    def __init__(self, seqs, name_, motifs):
+    def __init__(self, seqs, name_, motifs_):
         self.seqs = seqs
         self.name = name_
         len_seq = 0
@@ -198,10 +198,13 @@ class Drawing():
                 len_seq = seq.seq_len
         self.longest = len_seq
         self.motif_colors = dict()
-        for index, motif in enumerate(motifs):
+        self.motifs = motifs_
+        for index, motif in enumerate(self.motifs):
             # Max 5 motifs
-            # starts at bluish magenta, goes to deep orange
-            color = (203/255, 20/255, (255-index*50)/255)
+            # Two regimes of color change
+            color = ((201-index*100)/255, 63/255, 255/255)
+            if index>2:
+                color = ((255-index*50)/255, (114+index*25)/255, (211-index*50)/255)
             self.motif_colors[motif] = color
 
     def draw_seqs(self):
@@ -214,10 +217,11 @@ class Drawing():
         width = self.longest + edge*2
         height_per_seq = 200
         height = num_seq*height_per_seq # excluding height needed for key
+        total_height = height + 22*len(self.motifs)
         exon_height = 50
         intron_height = 20
 
-        surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
+        surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, total_height)
         ctx = cairo.Context(surface)
         # Create white background
         ctx.set_source_rgb(1, 1, 1)  
@@ -270,14 +274,43 @@ class Drawing():
                 # Finially, draw the damn thing
                 # (x, y, width, height)
                 # if there are overlaps, the y coordinate gets moved down by a multiple of motif height
-                ctx.rectangle(start+edge, m_draw_height+motif_height*prev_overlaps, len(motif_text), motif_height)
+                if num_overlaps > 0:
+                    ctx.rectangle(start+edge, m_draw_height+motif_height*prev_overlaps, len(motif_text), motif_height)
+                else:
+                    ctx.rectangle(start+edge, m_draw_height, len(motif_text), motif_height)
+                #ctx.rectangle(start+edge, m_draw_height, len(motif_text), motif_height)
                 ctx.fill() 
                 # after drawing, if this sequence has overlaps, increment prev_overlaps, otherwise reset
                 if num_overlaps > 0:
-                    # if 
+                    #print(prev_overlaps, num_overlaps)
+                    # if this motif overlapped, 
                     prev_overlaps += 1
                 else:
                     prev_overlaps = 0
+
+
+        # Draw key
+        # 1 point font is roughly 1.333 pixels
+        longest_motif = max([len(x) for x in self.motifs])
+        key_width = longest_motif*1.333*12 + edge/4
+        key_height = len(self.motifs)*18*1.333 + edge*1.2/2
+        # coordinates of the key, where origin is upper left
+        x0 = width-key_width-edge
+        y0 = len(self.seqs)*height_per_seq-edge*1.2
+        # Move to below sequences, draw outline of key
+        ctx.set_source_rgb(0,0,0)
+        ctx.rectangle(x0, y0, key_width, key_height)
+        ctx.stroke()
+        ctx.select_font_face("Sans", cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
+        ctx.set_font_size(18)
+        for index, motif in enumerate(self.motifs):
+            c1, c2, c3 = self.motif_colors[motif]
+            ctx.set_source_rgb(c1, c2, c3)
+            ctx.rectangle(x0+edge-20, y0+edge/2+index*22*1.333-12, 15, 15)
+            ctx.fill()
+            ctx.move_to(x0+edge, y0+edge/2+index*22*1.333)
+            ctx.set_source_rgb(0,0,0)
+            ctx.show_text(motif)
 
         # export drawing
         surface.write_to_png(self.name+".png")
@@ -311,9 +344,8 @@ for seq in seq_objects:
 # refactor found dict to include whether it overlaps
 for seq in seq_objects:
     seq.refactor_found()
-    #print(seq.overlap)
 
-
-# Draw
-drawing = Drawing(seq_objects, "fig_", motifs=mots)
+# Draw the figure
+fig_name = args.f.split(".")[0]
+drawing = Drawing(seq_objects, fig_name, motifs_=mots)
 drawing.draw_seqs()
